@@ -135,10 +135,10 @@
 1. **Agente Policía**
 
    * Definir prompt / lógica en Python para:
-
      * Normalización del texto.
      * Detección de intención “consultar saldo”.
      * Mensaje de rechazo genérico si la intención no es válida.
+
 2. **Agente Balances**
 
    * Tool HTTP configurado para llamar al microservicio:
@@ -279,3 +279,97 @@ Te propongo algo así:
 | Scripts utilitarios              | Scripts para inicializar entorno local (crear venv, instalar deps, levantar servicios)       | `scripts/`                                                  |
 | Casos de prueba                  | Lista de test manuales (y opcionalmente tests automatizados `pytest`)                        | `tests/`                                                    |
 
+---
+
+Empieza por lo estructural: **identidad y autenticación**. Sin eso, nada más sirve. Orden recomendado:
+
+---
+---
+
+### 1. **Preparar el repositorio**
+
+* Crea un repo limpio: `poc-multiagentes-balance/`.
+* Estructura base:
+
+  ```
+  poc-multiagentes-balance/
+  ├── infra/
+  │   ├── keycloak/
+  │   ├── deploy/
+  │   └── config/
+  ├── services/
+  │   └── balance-mock/
+  ├── agents/
+  │   ├── config/
+  │   ├── prompts/
+  │   └── tools/
+  ├── frontend/
+  │   └── flask_app/
+  ├── scripts/
+  ├── tests/
+  └── README.md
+  ```
+
+Esto te da control de versiones y reproducibilidad desde el primer commit.
+
+---
+
+### 2. **Levantar y exportar Keycloak**
+
+1. Usa tu instancia actual o levanta una local (Docker si quieres aislamiento).
+2. Crea el **realm `poc-balance`** y los **clients** (`frontend`, `agent-service`).
+3. Crea usuarios de prueba con `customer_id`.
+4. Exporta el realm a `infra/keycloak/realm-poc-balance.json`.
+5. Documenta los pasos en `infra/keycloak/README.md`.
+
+> 🔹 Resultado: tienes el sistema de identidad funcional y versionado.
+
+---
+
+### 3. **Microservicio mock**
+
+1. Crea un servicio Flask simple (`services/balance-mock/app.py`).
+2. Valida tokens con librerías (`python-jose`, `requests`).
+3. Define tabla `customer_id → balance`.
+4. Añade `Dockerfile` y `requirements.txt`.
+5. Prueba con tokens reales de Keycloak.
+
+> 🔹 Resultado: backend simulado, autenticado y portable.
+
+---
+
+### 4. **Agentes y tools**
+
+1. Define prompts en texto plano (`agents/prompts/policia.txt`, `balances.txt`).
+2. Define tool HTTP (`agents/tools/balance-tool.json`).
+3. Crea archivo de configuración YAML (`agents/config/agents.yaml`) para registrar ambos agentes y el flujo.
+4. Prueba en Foundry con tokens del `agent-service`.
+
+> 🔹 Resultado: agentes operativos con configuración declarativa versionada.
+
+---
+
+### 5. **Frontend Flask**
+
+1. Crear app Flask con login OIDC (Keycloak) y página de chat.
+2. Guardar JWT del usuario en sesión.
+3. Endpoint `/chat` que:
+
+   * Envía mensaje al Agent Service.
+   * Adjunta JWT del usuario en metadata.
+4. Mostrar respuesta del agente en HTML simple.
+
+> 🔹 Resultado: interfaz mínima pero funcional de extremo a extremo.
+
+---
+
+### 6. **Pruebas y documentación**
+
+1. Probar login → consulta de saldo → respuesta.
+2. Confirmar aislamiento por usuario.
+3. Documentar casos y resultados en `tests/README.md`.
+
+---
+
+¿Quieres que te entregue ahora los **comandos concretos y scripts iniciales** (por ejemplo, para levantar Keycloak en Docker y configurar el realm automáticamente)?
+Eso sería el punto de partida más práctico para ejecutar la PoC.
