@@ -369,7 +369,39 @@ Esto te da control de versiones y reproducibilidad desde el primer commit.
 2. Confirmar aislamiento por usuario.
 3. Documentar casos y resultados en `tests/README.md`.
 
----
+### Diagrama de Secuencia:
 
-¿Quieres que te entregue ahora los **comandos concretos y scripts iniciales** (por ejemplo, para levantar Keycloak en Docker y configurar el realm automáticamente)?
-Eso sería el punto de partida más práctico para ejecutar la PoC.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Usuario
+    participant B as Browser
+    participant F as Flask Backend
+    participant K as Keycloak
+    participant A as Foundry Agent Service
+    participant M as balances-mock
+
+    U->>B: Abre chatbot
+    B->>F: GET /login
+    F->>K: Redirección OIDC Authorization Code
+    K-->>B: Login
+    B->>F: GET /callback?code=...
+    F->>K: Intercambia code por tokens
+    K-->>F: access_token + id_token
+    F->>F: Guarda access_token en sesión
+
+    U->>B: "Quiero ver mi saldo"
+    B->>F: POST /chat {message}
+    F->>A: Crea thread / mensaje / run
+
+    A-->>F: Solicita tool call get_current_balance()
+    F->>F: Lee access_token desde sesión
+    F->>M: POST /api/balance\nAuthorization: Bearer <access_token>
+    M->>M: Valida JWT y extrae customer_id
+    M-->>F: {balance_actual}
+
+    F->>A: Envía tool output
+    A-->>F: Respuesta final del agente
+    F-->>B: JSON/HTML con respuesta
+    B-->>U: Muestra saldo
+```
