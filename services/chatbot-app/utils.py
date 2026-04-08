@@ -1,3 +1,9 @@
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -15,19 +21,19 @@ def safe_serialize(obj: Any) -> Any:
     if isinstance(obj, list):
         return [safe_serialize(v) for v in obj]
 
-    if hasattr(obj, "as_dict") and callable(obj.as_dict):
+    if hasattr(obj, 'as_dict') and callable(obj.as_dict):
         try:
             return safe_serialize(obj.as_dict())
         except Exception:
             pass
 
-    if hasattr(obj, "model_dump") and callable(obj.model_dump):
+    if hasattr(obj, 'model_dump') and callable(obj.model_dump):
         try:
             return safe_serialize(obj.model_dump())
         except Exception:
             pass
 
-    if hasattr(obj, "__dict__"):
+    if hasattr(obj, '__dict__'):
         try:
             return safe_serialize(vars(obj))
         except Exception:
@@ -37,5 +43,5 @@ def safe_serialize(obj: Any) -> Any:
 
 
 def append_jsonl(path: Path, record: dict) -> None:
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    with path.open('a', encoding='utf-8') as f:
+        f.write(json.dumps(record, ensure_ascii=False) + '\n')

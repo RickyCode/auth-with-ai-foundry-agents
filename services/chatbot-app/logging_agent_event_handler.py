@@ -1,13 +1,9 @@
 import json
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import requests
-from fastapi import Request
-from fastapi.responses import JSONResponse
-
 from azure.ai.agents.models import (
     AgentEventHandler,
     MessageDeltaChunk,
@@ -15,6 +11,9 @@ from azure.ai.agents.models import (
     ThreadMessage,
     ThreadRun,
 )
+
+from .utils import append_jsonl, safe_serialize, utc_now_iso
+
 
 class LoggingAgentEventHandler(AgentEventHandler[str]):
     def __init__(
@@ -41,7 +40,7 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
         append_jsonl(
             self.log_file,
             {
-                "timestamp": utc_now_iso(),
+                'timestamp': utc_now_iso(),
                 **record,
             },
         )
@@ -49,9 +48,9 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
     def on_event(self, event_type, event_data, *args, **kwargs) -> None:
         self._log(
             {
-                "event_type": str(event_type),
-                "event_data_type": type(event_data).__name__ if event_data is not None else None,
-                "data": safe_serialize(event_data),
+                'event_type': str(event_type),
+                'event_data_type': type(event_data).__name__ if event_data is not None else None,
+                'data': safe_serialize(event_data),
             }
         )
 
@@ -59,7 +58,7 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
         text_value = None
 
         try:
-            if hasattr(delta, "text") and delta.text is not None:
+            if hasattr(delta, 'text') and delta.text is not None:
                 text_value = delta.text
         except Exception:
             text_value = None
@@ -69,65 +68,65 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
 
         self._log(
             {
-                "type": "message_delta",
-                "delta": safe_serialize(delta),
+                'type': 'message_delta',
+                'delta': safe_serialize(delta),
             }
         )
 
     def on_message_done(self, message: ThreadMessage) -> None:
         self._log(
             {
-                "type": "message_done",
-                "message_id": getattr(message, "id", None),
-                "role": getattr(message, "role", None),
-                "status": getattr(message, "status", None),
-                "content": safe_serialize(getattr(message, "content", None)),
+                'type': 'message_done',
+                'message_id': getattr(message, 'id', None),
+                'role': getattr(message, 'role', None),
+                'status': getattr(message, 'status', None),
+                'content': safe_serialize(getattr(message, 'content', None)),
             }
         )
 
     def on_run_step(self, step: RunStep) -> None:
         self._log(
             {
-                "type": "run_step",
-                "step_id": getattr(step, "id", None),
-                "step_status": getattr(step, "status", None),
-                "step_data": safe_serialize(step),
+                'type': 'run_step',
+                'step_id': getattr(step, 'id', None),
+                'step_status': getattr(step, 'status', None),
+                'step_data': safe_serialize(step),
             }
         )
 
     def on_run_step_done(self, step: RunStep) -> None:
         self._log(
             {
-                "type": "run_step_done",
-                "step_id": getattr(step, "id", None),
-                "step_status": getattr(step, "status", None),
-                "step_data": safe_serialize(step),
+                'type': 'run_step_done',
+                'step_id': getattr(step, 'id', None),
+                'step_status': getattr(step, 'status', None),
+                'step_data': safe_serialize(step),
             }
         )
 
     def on_run(self, run: ThreadRun) -> None:
-        self.run_id = getattr(run, "id", None)
+        self.run_id = getattr(run, 'id', None)
 
         self._log(
             {
-                "type": "run",
-                "run_id": getattr(run, "id", None),
-                "status": getattr(run, "status", None),
-                "required_action": safe_serialize(getattr(run, "required_action", None)),
-                "last_error": safe_serialize(getattr(run, "last_error", None)),
+                'type': 'run',
+                'run_id': getattr(run, 'id', None),
+                'status': getattr(run, 'status', None),
+                'required_action': safe_serialize(getattr(run, 'required_action', None)),
+                'last_error': safe_serialize(getattr(run, 'last_error', None)),
             }
         )
 
     def on_run_done(self, run: ThreadRun) -> None:
-        self.run_id = getattr(run, "id", None)
+        self.run_id = getattr(run, 'id', None)
         self.final_run = run
 
         self._log(
             {
-                "type": "run_done",
-                "run_id": getattr(run, "id", None),
-                "status": getattr(run, "status", None),
-                "last_error": safe_serialize(getattr(run, "last_error", None)),
+                'type': 'run_done',
+                'run_id': getattr(run, 'id', None),
+                'status': getattr(run, 'status', None),
+                'last_error': safe_serialize(getattr(run, 'last_error', None)),
             }
         )
 
@@ -135,32 +134,32 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
         self.last_error = data
         self._log(
             {
-                "type": "stream_error",
-                "error": safe_serialize(data),
+                'type': 'stream_error',
+                'error': safe_serialize(data),
             }
         )
 
     def on_done(self) -> None:
-        self._log({"type": "stream_done"})
+        self._log({'type': 'stream_done'})
 
     def on_unhandled_event(self, event_type, event_data) -> None:
         self._log(
             {
-                "type": "unhandled_event",
-                "event_type": str(event_type),
-                "data": safe_serialize(event_data),
+                'type': 'unhandled_event',
+                'event_type': str(event_type),
+                'data': safe_serialize(event_data),
             }
         )
 
     def on_run_requires_action(self, run: ThreadRun) -> None:
-        self.run_id = getattr(run, "id", None)
+        self.run_id = getattr(run, 'id', None)
 
         self._log(
             {
-                "type": "run_requires_action",
-                "run_id": getattr(run, "id", None),
-                "status": getattr(run, "status", None),
-                "required_action": safe_serialize(getattr(run, "required_action", None)),
+                'type': 'run_requires_action',
+                'run_id': getattr(run, 'id', None),
+                'status': getattr(run, 'status', None),
+                'required_action': safe_serialize(getattr(run, 'required_action', None)),
             }
         )
 
@@ -170,27 +169,27 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
 
         for tool_call in submit_tool_outputs.tool_calls:
             function_name = tool_call.function.name
-            function_arguments = getattr(tool_call.function, "arguments", None)
+            function_arguments = getattr(tool_call.function, 'arguments', None)
 
             self._log(
                 {
-                    "type": "tool_call_received",
-                    "run_id": getattr(run, "id", None),
-                    "tool_call_id": getattr(tool_call, "id", None),
-                    "function_name": function_name,
-                    "function_arguments": safe_serialize(function_arguments),
+                    'type': 'tool_call_received',
+                    'run_id': getattr(run, 'id', None),
+                    'tool_call_id': getattr(tool_call, 'id', None),
+                    'function_name': function_name,
+                    'function_arguments': safe_serialize(function_arguments),
                 }
             )
 
-            if function_name == "get_current_balance":
+            if function_name == 'get_current_balance':
                 started = time.perf_counter()
 
                 try:
                     response = requests.post(
                         self.balance_api_url,
                         headers={
-                            "Authorization": f"Bearer {self.access_token}",
-                            "Content-Type": "application/json",
+                            'Authorization': f'Bearer {self.access_token}',
+                            'Content-Type': 'application/json',
                         },
                         json={},
                         timeout=10,
@@ -200,21 +199,21 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
 
                     self._log(
                         {
-                            "type": "tool_backend_response",
-                            "tool_call_id": getattr(tool_call, "id", None),
-                            "function_name": function_name,
-                            "status_code": response.status_code,
-                            "duration_ms": duration_ms,
-                            "response_text": response.text,
+                            'type': 'tool_backend_response',
+                            'tool_call_id': getattr(tool_call, 'id', None),
+                            'function_name': function_name,
+                            'status_code': response.status_code,
+                            'duration_ms': duration_ms,
+                            'response_text': response.text,
                         }
                     )
 
                     if response.status_code != 200:
                         output = json.dumps(
                             {
-                                "error": "balance_api_error",
-                                "status_code": response.status_code,
-                                "body": response.text,
+                                'error': 'balance_api_error',
+                                'status_code': response.status_code,
+                                'body': response.text,
                             }
                         )
                     else:
@@ -225,35 +224,35 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
 
                     self._log(
                         {
-                            "type": "tool_backend_exception",
-                            "tool_call_id": getattr(tool_call, "id", None),
-                            "function_name": function_name,
-                            "duration_ms": duration_ms,
-                            "exception": str(exc),
+                            'type': 'tool_backend_exception',
+                            'tool_call_id': getattr(tool_call, 'id', None),
+                            'function_name': function_name,
+                            'duration_ms': duration_ms,
+                            'exception': str(exc),
                         }
                     )
 
                     output = json.dumps(
                         {
-                            "error": "balance_api_exception",
-                            "message": str(exc),
+                            'error': 'balance_api_exception',
+                            'message': str(exc),
                         }
                     )
 
                 tool_outputs.append(
                     {
-                        "tool_call_id": tool_call.id,
-                        "output": output,
+                        'tool_call_id': tool_call.id,
+                        'output': output,
                     }
                 )
             else:
                 tool_outputs.append(
                     {
-                        "tool_call_id": tool_call.id,
-                        "output": json.dumps(
+                        'tool_call_id': tool_call.id,
+                        'output': json.dumps(
                             {
-                                "error": "tool_not_implemented",
-                                "function_name": function_name,
+                                'error': 'tool_not_implemented',
+                                'function_name': function_name,
                             }
                         ),
                     }
@@ -261,9 +260,9 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
 
         self._log(
             {
-                "type": "submit_tool_outputs_stream",
-                "run_id": getattr(run, "id", None),
-                "tool_outputs": safe_serialize(tool_outputs),
+                'type': 'submit_tool_outputs_stream',
+                'run_id': getattr(run, 'id', None),
+                'tool_outputs': safe_serialize(tool_outputs),
             }
         )
 
