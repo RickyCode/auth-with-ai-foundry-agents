@@ -30,11 +30,11 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
         self.log_file = log_file
         self.access_token = access_token
         self.balance_api_url = balance_api_url
-
         self.run_id: str | None = None
         self.final_run: ThreadRun | None = None
         self.assistant_text_parts: list[str] = []
         self.last_error: Any = None
+
 
     def _log(self, record: dict) -> None:
         append_jsonl(
@@ -45,6 +45,7 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             },
         )
 
+
     def on_event(self, event_type, event_data, *args, **kwargs) -> None:
         self._log(
             {
@@ -54,24 +55,23 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             }
         )
 
+
     def on_message_delta(self, delta: MessageDeltaChunk) -> None:
         text_value = None
-
         try:
             if hasattr(delta, 'text') and delta.text is not None:
                 text_value = delta.text
         except Exception:
             text_value = None
-
         if text_value:
             self.assistant_text_parts.append(str(text_value))
-
         self._log(
             {
                 'type': 'message_delta',
                 'delta': safe_serialize(delta),
             }
         )
+
 
     def on_message_done(self, message: ThreadMessage) -> None:
         self._log(
@@ -84,29 +84,39 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             }
         )
 
+
     def on_run_step(self, step: RunStep) -> None:
+        step_run_id = getattr(step, 'run_id', None)
+        if step_run_id:
+            self.run_id = step_run_id
         self._log(
             {
                 'type': 'run_step',
                 'step_id': getattr(step, 'id', None),
+                'run_id': step_run_id,
                 'step_status': getattr(step, 'status', None),
                 'step_data': safe_serialize(step),
             }
         )
 
+
     def on_run_step_done(self, step: RunStep) -> None:
+        step_run_id = getattr(step, 'run_id', None)
+        if step_run_id:
+            self.run_id = step_run_id
         self._log(
             {
                 'type': 'run_step_done',
                 'step_id': getattr(step, 'id', None),
+                'run_id': step_run_id,
                 'step_status': getattr(step, 'status', None),
                 'step_data': safe_serialize(step),
             }
         )
 
+
     def on_run(self, run: ThreadRun) -> None:
         self.run_id = getattr(run, 'id', None)
-
         self._log(
             {
                 'type': 'run',
@@ -117,10 +127,10 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             }
         )
 
+
     def on_run_done(self, run: ThreadRun) -> None:
         self.run_id = getattr(run, 'id', None)
         self.final_run = run
-
         self._log(
             {
                 'type': 'run_done',
@@ -129,6 +139,7 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                 'last_error': safe_serialize(getattr(run, 'last_error', None)),
             }
         )
+
 
     def on_error(self, data: Any) -> None:
         self.last_error = data
@@ -139,8 +150,10 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             }
         )
 
+
     def on_done(self) -> None:
         self._log({'type': 'stream_done'})
+
 
     def on_unhandled_event(self, event_type, event_data) -> None:
         self._log(
@@ -151,9 +164,9 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             }
         )
 
+
     def on_run_requires_action(self, run: ThreadRun) -> None:
         self.run_id = getattr(run, 'id', None)
-
         self._log(
             {
                 'type': 'run_requires_action',
@@ -162,15 +175,12 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                 'required_action': safe_serialize(getattr(run, 'required_action', None)),
             }
         )
-
         tool_outputs = []
         required_action = run.required_action
         submit_tool_outputs = required_action.submit_tool_outputs
-
         for tool_call in submit_tool_outputs.tool_calls:
             function_name = tool_call.function.name
             function_arguments = getattr(tool_call.function, 'arguments', None)
-
             self._log(
                 {
                     'type': 'tool_call_received',
@@ -180,10 +190,8 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                     'function_arguments': safe_serialize(function_arguments),
                 }
             )
-
             if function_name == 'get_current_balance':
                 started = time.perf_counter()
-
                 try:
                     response = requests.post(
                         self.balance_api_url,
@@ -194,9 +202,7 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                         json={},
                         timeout=10,
                     )
-
                     duration_ms = round((time.perf_counter() - started) * 1000, 2)
-
                     self._log(
                         {
                             'type': 'tool_backend_response',
@@ -207,7 +213,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                             'response_text': response.text,
                         }
                     )
-
                     if response.status_code != 200:
                         output = json.dumps(
                             {
@@ -218,10 +223,8 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                         )
                     else:
                         output = json.dumps(response.json())
-
                 except Exception as exc:
                     duration_ms = round((time.perf_counter() - started) * 1000, 2)
-
                     self._log(
                         {
                             'type': 'tool_backend_exception',
@@ -231,14 +234,12 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                             'exception': str(exc),
                         }
                     )
-
                     output = json.dumps(
                         {
                             'error': 'balance_api_exception',
                             'message': str(exc),
                         }
                     )
-
                 tool_outputs.append(
                     {
                         'tool_call_id': tool_call.id,
@@ -257,19 +258,17 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                         ),
                     }
                 )
-
         self._log(
             {
-                'type': 'submit_tool_outputs_stream',
+                'type': 'submit_tool_outputs',
                 'run_id': getattr(run, 'id', None),
                 'tool_outputs': safe_serialize(tool_outputs),
             }
         )
-
-        with self.client.runs.submit_tool_outputs_stream(
+        updated_run = self.client.runs.submit_tool_outputs(
             thread_id=self.thread_id,
             run_id=run.id,
-            body=tool_outputs,
-            event_handler=self,
-        ) as stream:
-            stream.until_done()
+            tool_outputs=tool_outputs,
+        )
+        self.run_id = getattr(updated_run, 'id', self.run_id)
+        self.final_run = updated_run
