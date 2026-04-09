@@ -706,9 +706,11 @@ def _extract_message_text_content(message) -> str:
 @app.get('/chat/history')
 async def chat_history(request: Request):
     thread_id = request.session.get('thread_id')
+    last_run_id = request.session.get('last_run_id')
     if not thread_id:
         return {
             'thread_id': None,
+            'last_run_id': last_run_id,
             'messages': [],
         }
 
@@ -731,5 +733,181 @@ async def chat_history(request: Request):
 
     return {
         'thread_id': thread_id,
+        'last_run_id': last_run_id,
         'messages': visible_messages,
+    }
+
+
+@app.post('/chat/reset')
+async def reset_chat(request: Request):
+    previous_thread_id = request.session.pop('thread_id', None)
+    previous_run_id = request.session.pop('last_run_id', None)
+
+    return {
+        'reset': True,
+        'previous_thread_id': previous_thread_id,
+        'previous_run_id': previous_run_id,
+        'thread_id': None,
+        'last_run_id': None,
+    }
+
+
+@app.post('/chat')
+async def chat(message: Message, request: Request):
+    user_message = message.message
+    if not user_message:
+        return JSONResponse({'error': 'message is required'}, status_code=400)
+
+    access_token = request.session.get('access_token')
+    if not access_token:
+        return JSONResponse({'error': 'user is not authenticated'}, status_code=401)
+
+    thread_id, thread_created = _get_or_create_thread_id(request)
+    log_file = LOG_DIR / f'agent-run-{thread_id}-{int(time.time())}.jsonl'
+
+    if thread_created:
+        append_jsonl(
+            log_file,
+            {
+                'timestamp': utc_now_iso(),
+                'type': 'thread_created',
+                'thread_id': thread_id,
+            },
+        )
+
+    thread_id = _create_user_message(
+        request=request,
+        thread_id=thread_id,
+        user_message=user_message,
+        log_file=log_file,
+    )
+    append_jsonl(
+        log_file,
+        {
+            'timestamp': utc_now_iso(),
+            'type': 'user_message_created',
+            'thread_id': thread_id,
+            'content': user_message,
+        },
+    )
+    handler = LoggingAgentEventHandler(
+        client=client,
+        thread_id=thread_id,
+        log_file=log_file,
+        access_token=access_token,
+        balance_api_url=balance_api_url,
+    )
+
+    with client.runs.stream(
+        thread_id=thread_id,
+        agent_id=BALANCE_AGENT_ID,
+        event_handler=handler,
+    ) as stream:
+        stream.until_done()
+
+    run = handler.final_run
+    if run is None and handler.run_id:
+        run = _poll_run_until_terminal(
+            thread_id=thread_id,
+            run_id=handler.run_id,
+        )
+
+    if run is not None and str(getattr(run, 'status', '')).lower().endswith('requires_action'):
+        append_jsonl(
+            log_file,
+            {
+                'timestamp': utc_now_iso(),
+                'type': 'requires_action_detected_in_chat',
+                'thread_id': thread_id,
+                'run_id': getattr(run, 'id', None),
+                'status': str(getattr(run, 'status', None)),
+            },
+        )
+        handler.on_run_requires_action(run)
+        run = _poll_run_until_terminal(
+            thread_id=thread_id,
+            run_id=run.id,
+        )
+
+    assistant_text = _extract_assistant_text(''.join(handler.assistant_text_parts))
+    if not assistant_text:
+        assistant_text = _extract_assistant_text(
+            client.messages.get_last_message_text_by_role(
+                thread_id=thread_id,
+                role='assistant',
+            )
+        )
+
+    if run is not None:
+        request.session['last_run_id'] = getattr(run, 'id', None)
+
+    if run is None and assistant_text:
+        append_jsonl(
+            log_file,
+            {
+                'timestamp': utc_now_iso(),
+                'type': 'final_response',
+                'thread_id': thread_id,
+                'run_id': None,
+                'response': assistant_text,
+                'status': 'completed_via_stream_fallback',
+            },
+        )
+
+        return {
+            'thread_id': thread_id,
+            'run_id': None,
+            'status': 'completed_via_stream_fallback',
+            'message': {
+                'role': 'assistant',
+                'content': assistant_text,
+            },
+            'log_file': str(log_file),
+        }
+
+    if run is None:
+        return JSONResponse(
+            {
+                'error': 'run not found',
+                'thread_id': thread_id,
+                'log_file': str(log_file),
+                'stream_error': safe_serialize(handler.last_error),
+            },
+            status_code=500,
+        )
+
+    if str(getattr(run, 'status', '')).lower().endswith('completed') is False:
+        return JSONResponse(
+            {
+                'error': f"run failed: {getattr(run, 'status', None)}",
+                'thread_id': thread_id,
+                'run_id': getattr(run, 'id', None),
+                'last_error': safe_serialize(getattr(run, 'last_error', None)),
+                'stream_error': safe_serialize(handler.last_error),
+                'log_file': str(log_file),
+                'status': str(getattr(run, 'status', None)),
+            },
+            status_code=500,
+        )
+
+    append_jsonl(
+        log_file,
+        {
+            'timestamp': utc_now_iso(),
+            'type': 'final_response',
+            'thread_id': thread_id,
+            'run_id': getattr(run, 'id', None),
+            'response': assistant_text,
+        },
+    )
+
+    return {
+        'thread_id': thread_id,
+        'run_id': getattr(run, 'id', None),
+        'status': str(getattr(run, 'status', None)),
+        'message': {
+            'role': 'assistant',
+            'content': assistant_text,
+        },
+        'log_file': str(log_file),
     }

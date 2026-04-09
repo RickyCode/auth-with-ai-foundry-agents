@@ -3,6 +3,9 @@ const chatFormElement = document.getElementById('chat-form');
 const chatMessageElement = document.getElementById('chat-message');
 const chatSendButtonElement = document.getElementById('chat-send-button');
 const chatStatusElement = document.getElementById('chat-status');
+const chatThreadIdElement = document.getElementById('chat-thread-id');
+const chatRunIdElement = document.getElementById('chat-run-id');
+const chatResetButtonElement = document.getElementById('chat-reset-button');
 
 function setStatus(message, type = '') {
     chatStatusElement.textContent = message;
@@ -15,6 +18,21 @@ function setStatus(message, type = '') {
 
 function clearStatus() {
     setStatus('');
+}
+
+function renderConversationMetadata(threadId, lastRunId) {
+    if (threadId !== undefined) {
+        chatThreadIdElement.textContent = threadId ?? '-';
+    }
+
+    if (lastRunId !== undefined && lastRunId !== null && lastRunId !== '') {
+        chatRunIdElement.textContent = lastRunId;
+    }
+}
+
+function clearConversationMetadata() {
+    chatThreadIdElement.textContent = '-';
+    chatRunIdElement.textContent = '-';
 }
 
 function createMessageElement(message) {
@@ -60,7 +78,7 @@ function renderMessages(messages) {
 }
 
 async function loadHistory() {
-    setStatus('Loading conversation...', 'success');
+    setStatus('Loading conversation...', 'loading');
 
     const response = await fetch('/chat/history', {
         method: 'GET',
@@ -74,6 +92,13 @@ async function loadHistory() {
     }
 
     const payload = await response.json();
+
+    if (payload.thread_id === null) {
+        clearConversationMetadata();
+    } else {
+        renderConversationMetadata(payload.thread_id, payload.last_run_id);
+    }
+
     renderMessages(payload.messages ?? []);
     setStatus('Conversation loaded.', 'success');
 }
@@ -97,6 +122,23 @@ async function sendMessage(message) {
     return payload;
 }
 
+async function resetConversation() {
+    const response = await fetch('/chat/reset', {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+        },
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+        throw new Error(payload.error ?? 'Unable to reset conversation.');
+    }
+
+    return payload;
+}
+
 async function handleChatFormSubmit(event) {
     event.preventDefault();
 
@@ -108,12 +150,14 @@ async function handleChatFormSubmit(event) {
     }
 
     chatSendButtonElement.disabled = true;
+    chatResetButtonElement.disabled = true;
     chatMessageElement.disabled = true;
-    setStatus('Sending message...', 'success');
+    setStatus('Sending message...', 'loading');
 
     try {
-        await sendMessage(message);
+        const payload = await sendMessage(message);
         chatMessageElement.value = '';
+        renderConversationMetadata(payload.thread_id, payload.run_id);
         await loadHistory();
         setStatus('Message sent successfully.', 'success');
         chatMessageElement.focus();
@@ -121,15 +165,39 @@ async function handleChatFormSubmit(event) {
         setStatus(error.message, 'error');
     } finally {
         chatSendButtonElement.disabled = false;
+        chatResetButtonElement.disabled = false;
+        chatMessageElement.disabled = false;
+    }
+}
+
+async function handleResetClick() {
+    chatSendButtonElement.disabled = true;
+    chatResetButtonElement.disabled = true;
+    chatMessageElement.disabled = true;
+    setStatus('Resetting conversation...', 'loading');
+
+    try {
+        await resetConversation();
+        chatMessageElement.value = '';
+        await loadHistory();
+        setStatus('Conversation reset.', 'success');
+        chatMessageElement.focus();
+    } catch (error) {
+        setStatus(error.message, 'error');
+    } finally {
+        chatSendButtonElement.disabled = false;
+        chatResetButtonElement.disabled = false;
         chatMessageElement.disabled = false;
     }
 }
 
 async function initializeChat() {
     await loadHistory();
+    clearStatus();
 }
 
 chatFormElement.addEventListener('submit', handleChatFormSubmit);
+chatResetButtonElement.addEventListener('click', handleResetClick);
 
 initializeChat().catch((error) => {
     setStatus(error.message, 'error');
