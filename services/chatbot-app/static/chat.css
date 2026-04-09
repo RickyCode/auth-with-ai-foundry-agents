@@ -36,12 +36,12 @@ textarea {
 }
 
 .chat-shell {
-    max-width: 1200px;
+    max-width: 1600px;
     height: 100%;
     min-height: 0;
     margin: 0 auto;
     display: grid;
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: 280px minmax(0, 1fr) 320px;
     background: #ffffff;
     border: 1px solid #d9e2f0;
     border-radius: 20px;
@@ -423,34 +423,21 @@ textarea {
         border-bottom: 1px solid #e6edf7;
     }
 
+    .auth-sidebar {
+        border-left: 0;
+        border-top: 1px solid #e6edf7;
+    }
+
     .chat-main {
-        min-width: 0;
-        min-height: 0;
-        height: 100%;
-        display: grid;
-        grid-template-rows: auto minmax(0, 1fr) auto;
-        overflow: hidden;
+        grid-template-rows: auto auto auto;
     }
 
     .chat-history-section {
-        min-height: 0;
-        padding: 24px;
-        background: #f8fbff;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
+        overflow: visible;
     }
 
     .chat-history {
-        min-height: 0;
-        flex: 1 1 auto;
-        overflow-y: auto;
-        overflow-x: hidden;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        padding-right: 4px;
+        max-height: 50vh;
     }
 }
 
@@ -479,4 +466,70 @@ textarea {
     .chat-title {
         font-size: 1.4rem;
     }
+}
+
+.auth-sidebar {
+    min-height: 0;
+    background: #f8fbff;
+    border-left: 1px solid #e6edf7;
+    padding: 24px;
+    overflow-y: auto;
+}
+
+.auth-sidebar-card {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.auth-link-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.auth-claims-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+}
+
+.auth-claims-section-hidden {
+    display: none;
+}
+
+.auth-claims-table-wrapper {
+    overflow: auto;
+    border: 1px solid #d9e2f0;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.auth-claims-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.auth-claims-table th,
+.auth-claims-table td {
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid #eef2f7;
+    font-size: 0.82rem;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.auth-claims-table th {
+    background: #f8fbff;
+    color: #172033;
+    font-weight: 700;
+}
+
+.auth-claims-table tr:last-child td {
+    border-bottom: 0;
 }

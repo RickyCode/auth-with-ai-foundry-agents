@@ -6,6 +6,9 @@ const chatStatusElement = document.getElementById('chat-status');
 const chatThreadIdElement = document.getElementById('chat-thread-id');
 const chatRunIdElement = document.getElementById('chat-run-id');
 const chatResetButtonElement = document.getElementById('chat-reset-button');
+const authSessionStatusElement = document.getElementById('auth-session-status');
+const authClaimsSectionElement = document.getElementById('auth-claims-section');
+const authClaimsBodyElement = document.getElementById('auth-claims-body');
 
 function setStatus(message, type = '') {
     chatStatusElement.textContent = message;
@@ -33,6 +36,82 @@ function renderConversationMetadata(threadId, lastRunId) {
 function clearConversationMetadata() {
     chatThreadIdElement.textContent = '-';
     chatRunIdElement.textContent = '-';
+}
+
+function formatClaimValue(value) {
+    if (value === null || value === undefined) {
+        return '-';
+    }
+
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+    }
+
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch {
+        return String(value);
+    }
+}
+
+function clearAuthSessionView() {
+    authSessionStatusElement.textContent = 'Guest';
+    authClaimsBodyElement.innerHTML = '';
+    authClaimsSectionElement.classList.add('auth-claims-section-hidden');
+}
+
+function renderAuthClaims(claims) {
+    authClaimsBodyElement.innerHTML = '';
+
+    const claimEntries = Object.entries(claims ?? {});
+
+    if (claimEntries.length === 0) {
+        authClaimsSectionElement.classList.add('auth-claims-section-hidden');
+        return;
+    }
+
+    for (const [claimName, claimValue] of claimEntries) {
+        const rowElement = document.createElement('tr');
+
+        const nameCellElement = document.createElement('td');
+        nameCellElement.textContent = claimName;
+
+        const valueCellElement = document.createElement('td');
+        valueCellElement.textContent = formatClaimValue(claimValue);
+
+        rowElement.appendChild(nameCellElement);
+        rowElement.appendChild(valueCellElement);
+        authClaimsBodyElement.appendChild(rowElement);
+    }
+
+    authClaimsSectionElement.classList.remove('auth-claims-section-hidden');
+}
+
+function renderAuthSession(payload) {
+    if (!payload?.is_authenticated) {
+        clearAuthSessionView();
+        return;
+    }
+
+    authSessionStatusElement.textContent = 'Authenticated';
+    renderAuthClaims(payload.claims ?? {});
+}
+
+async function loadAuthSession() {
+    const response = await fetch('/auth/session', {
+        method: 'GET',
+        headers: {
+            Accept: 'application/json',
+        },
+        cache: 'no-store',
+    });
+
+    if (!response.ok) {
+        throw new Error('Unable to load authentication session.');
+    }
+
+    const payload = await response.json();
+    renderAuthSession(payload);
 }
 
 function formatEventTimestamp(timestamp) {
@@ -290,7 +369,11 @@ async function handleResetClick() {
 }
 
 async function initializeChat() {
-    await loadHistory();
+    await Promise.all([
+        loadHistory(),
+        loadAuthSession(),
+    ]);
+
     clearStatus();
 }
 

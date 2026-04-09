@@ -3,6 +3,8 @@ import re
 import time
 import json
 from pathlib import Path
+import base64
+from urllib.parse import urlencode
 
 import dotenv
 import requests
@@ -53,6 +55,54 @@ app.add_middleware(
 app.mount('/static', StaticFiles(directory='services/chatbot-app/static'), name='static')
 
 ACTIVE_RUN_ID_PATTERN = re.compile(r'run_[A-Za-z0-9]+')
+
+def _base64url_decode(value: str) -> bytes:
+    """Decode a base64url string."""
+    padding = '=' * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)
+
+
+def _decode_jwt_payload(token: str | None) -> dict:
+    """Decode the payload section of a JWT without signature verification."""
+    if not token:
+        return {}
+
+    token_parts = token.split('.')
+
+    if len(token_parts) != 3:
+        return {}
+
+    try:
+        payload_bytes = _base64url_decode(token_parts[1])
+        payload_data = json.loads(payload_bytes.decode('utf-8'))
+    except Exception:
+        return {}
+
+    if isinstance(payload_data, dict):
+        return payload_data
+
+    return {}
+
+
+def _get_post_logout_redirect_uri() -> str:
+    """Build the post logout redirect URI."""
+    return 'http://localhost:5000/chat/ui'
+
+
+def _get_end_session_url(id_token_hint: str | None) -> str:
+    """Build the Keycloak end-session URL."""
+    query_params = {
+        'post_logout_redirect_uri': _get_post_logout_redirect_uri(),
+        'client_id': CLIENT_ID,
+    }
+
+    if id_token_hint:
+        query_params['id_token_hint'] = id_token_hint
+
+    return (
+        f'{KEYCLOAK_BASE_URL}/realms/{REALM_NAME}/protocol/openid-connect/logout'
+        f'?{urlencode(query_params)}'
+    )
 
 
 # def _extract_assistant_text(value) -> str:
@@ -335,9 +385,7 @@ async def callback(request: Request, code: str):
         'code': code,
         'redirect_uri': REDIRECT_URI,
     }
-
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-
     response = requests.post(TOKEN_URL, data=data, headers=headers)
 
     if response.status_code != 200:
@@ -347,16 +395,39 @@ async def callback(request: Request, code: str):
         )
 
     tokens = response.json()
+    expires_in = int(tokens.get('expires_in', 0))
+    expires_at = int(time.time()) + expires_in if expires_in > 0 else None
 
-    request.session['access_token'] = tokens['access_token']
+    request.session['access_token'] = tokens.get('access_token')
+    request.session['refresh_token'] = tokens.get('refresh_token')
+    request.session['id_token'] = tokens.get('id_token')
+    request.session['token_type'] = tokens.get('token_type')
+    request.session['expires_in'] = expires_in
+    request.session['expires_at'] = expires_at
 
-    return RedirectResponse(url='/')
+    return RedirectResponse(url='/chat/ui')
 
 
 @app.get('/logout')
 async def logout(request: Request):
+    id_token = request.session.get('id_token')
+    end_session_url = _get_end_session_url(id_token_hint=id_token)
+
     request.session.clear()
-    return RedirectResponse(url='/', status_code=302)
+
+    return RedirectResponse(url=end_session_url, status_code=302)
+
+@app.get('/auth/session')
+async def auth_session(request: Request):
+    access_token = request.session.get('access_token')
+    expires_at = request.session.get('expires_at')
+    claims = _decode_jwt_payload(access_token)
+
+    return {
+        'is_authenticated': bool(access_token and claims),
+        'expires_at': expires_at,
+        'claims': claims,
+    }
 
 
 class Message(BaseModel):
@@ -670,9 +741,7 @@ def _extract_assistant_text(value) -> str:
 
 @app.get('/chat/ui', response_class=HTMLResponse)
 async def chat_ui():
-    print('Current work directory:', os.getcwd())
     return FileResponse(
-        # Path('templates/chat.html'),
         Path('services/chatbot-app/templates/chat.html'),
         media_type='text/html',
     )
@@ -941,8 +1010,8 @@ async def chat(message: Message, request: Request):
         return JSONResponse({'error': 'message is required'}, status_code=400)
 
     access_token = request.session.get('access_token')
-    if not access_token:
-        return JSONResponse({'error': 'user is not authenticated'}, status_code=401)
+    # if not access_token:
+    #     return JSONResponse({'error': 'user is not authenticated'}, status_code=401)
 
     thread_id, thread_created = _get_or_create_thread_id(request)
     log_file = LOG_DIR / f'agent-run-{thread_id}-{int(time.time())}.jsonl'

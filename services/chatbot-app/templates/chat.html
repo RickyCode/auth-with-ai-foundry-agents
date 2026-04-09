@@ -12,17 +12,14 @@
             <aside class="chat-sidebar" aria-label="Conversation metadata">
                 <div class="chat-sidebar-card">
                     <h2 class="chat-sidebar-title">Conversation</h2>
-
                     <div class="chat-metadata">
                         <span class="chat-metadata-label">Thread ID</span>
                         <code id="chat-thread-id" class="chat-metadata-value">-</code>
                     </div>
-
                     <div class="chat-metadata">
                         <span class="chat-metadata-label">Last Run ID</span>
                         <code id="chat-run-id" class="chat-metadata-value">-</code>
                     </div>
-
                     <div class="chat-sidebar-actions">
                         <button
                             id="chat-reset-button"
@@ -70,9 +67,47 @@
                     </form>
                 </section>
             </section>
+
+            <aside class="auth-sidebar" aria-label="Authentication panel">
+                <div class="auth-sidebar-card">
+                    <h2 class="chat-sidebar-title">Authentication</h2>
+
+                    <div class="chat-metadata">
+                        <span class="chat-metadata-label">Session status</span>
+                        <code id="auth-session-status" class="chat-metadata-value">Guest</code>
+                    </div>
+
+                    <div class="chat-sidebar-actions">
+                        <a id="auth-login-link" class="chat-button auth-link-button" href="/login">
+                            Login
+                        </a>
+                        <a
+                            id="auth-logout-link"
+                            class="chat-button chat-button-secondary auth-link-button"
+                            href="/logout"
+                        >
+                            Logout
+                        </a>
+                    </div>
+
+                    <div id="auth-claims-section" class="auth-claims-section auth-claims-section-hidden">
+                        <span class="chat-metadata-label">Access token claims</span>
+                        <div class="auth-claims-table-wrapper">
+                            <table class="auth-claims-table">
+                                <thead>
+                                    <tr>
+                                        <th>Claim</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="auth-claims-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </aside>
         </section>
     </main>
-
     <script src="/static/chat.js"></script>
 </body>
 </html>
