@@ -35,7 +35,77 @@ function clearConversationMetadata() {
     chatRunIdElement.textContent = '-';
 }
 
+function formatEventTimestamp(timestamp) {
+    if (!timestamp) {
+        return '-';
+    }
+
+    const parsedDate = new Date(timestamp);
+    if (Number.isNaN(parsedDate.getTime())) {
+        return timestamp;
+    }
+
+    return parsedDate.toLocaleString();
+}
+
+function createStreamEventElement(event) {
+    const itemElement = document.createElement('li');
+    itemElement.className = 'chat-stream-event';
+
+    const timestampElement = document.createElement('span');
+    timestampElement.className = 'chat-stream-event-timestamp';
+    timestampElement.textContent = formatEventTimestamp(event.timestamp);
+
+    const typeElement = document.createElement('span');
+    typeElement.className = 'chat-stream-event-type';
+    typeElement.textContent = event.event_type ?? '-';
+
+    const summaryElement = document.createElement('p');
+    summaryElement.className = 'chat-stream-event-summary';
+    summaryElement.textContent = event.summary ?? '';
+
+    itemElement.appendChild(timestampElement);
+    itemElement.appendChild(typeElement);
+    itemElement.appendChild(summaryElement);
+
+    return itemElement;
+}
+
+function createStreamEventsElement(message) {
+    const streamEvents = Array.isArray(message.stream_events) ? message.stream_events : [];
+    if (message.role !== 'assistant' || streamEvents.length === 0) {
+        return null;
+    }
+
+    const detailsElement = document.createElement('details');
+    detailsElement.className = 'chat-stream-details';
+
+    const summaryElement = document.createElement('summary');
+    summaryElement.className = 'chat-stream-summary';
+    summaryElement.textContent = `Stream events (${streamEvents.length})`;
+
+    const listElement = document.createElement('ol');
+    listElement.className = 'chat-stream-events';
+
+    for (const event of streamEvents) {
+        listElement.appendChild(createStreamEventElement(event));
+    }
+
+    detailsElement.appendChild(summaryElement);
+    detailsElement.appendChild(listElement);
+
+    return detailsElement;
+}
+
 function createMessageElement(message) {
+    const wrapperElement = document.createElement('div');
+    wrapperElement.className = 'chat-message-block';
+
+    const streamEventsElement = createStreamEventsElement(message);
+    if (streamEventsElement !== null) {
+        wrapperElement.appendChild(streamEventsElement);
+    }
+
     const messageElement = document.createElement('article');
     messageElement.className = `chat-message chat-message-${message.role}`;
 
@@ -49,8 +119,9 @@ function createMessageElement(message) {
 
     messageElement.appendChild(roleElement);
     messageElement.appendChild(contentElement);
+    wrapperElement.appendChild(messageElement);
 
-    return messageElement;
+    return wrapperElement;
 }
 
 function createEmptyStateElement() {
@@ -85,6 +156,7 @@ async function loadHistory() {
         headers: {
             Accept: 'application/json',
         },
+        cache: 'no-store',
     });
 
     if (!response.ok) {
