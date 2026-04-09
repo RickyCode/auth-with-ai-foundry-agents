@@ -399,22 +399,27 @@ async def callback(request: Request, code: str):
     expires_at = int(time.time()) + expires_in if expires_in > 0 else None
 
     request.session['access_token'] = tokens.get('access_token')
-    request.session['refresh_token'] = tokens.get('refresh_token')
-    request.session['id_token'] = tokens.get('id_token')
-    request.session['token_type'] = tokens.get('token_type')
-    request.session['expires_in'] = expires_in
+    # request.session['refresh_token'] = tokens.get('refresh_token')
+    # request.session['id_token'] = tokens.get('id_token')
+    # request.session['token_type'] = tokens.get('token_type')
+    # request.session['expires_in'] = expires_in
     request.session['expires_at'] = expires_at
 
     return RedirectResponse(url='/chat/ui')
 
 
+# @app.get('/logout')
+# async def logout(request: Request):
+#     id_token = request.session.get('id_token')
+#     end_session_url = _get_end_session_url(id_token_hint=id_token)
+
+#     request.session.clear()
+
+#     return RedirectResponse(url=end_session_url, status_code=302)
 @app.get('/logout')
 async def logout(request: Request):
-    id_token = request.session.get('id_token')
-    end_session_url = _get_end_session_url(id_token_hint=id_token)
-
+    end_session_url = _get_end_session_url(id_token_hint=None)
     request.session.clear()
-
     return RedirectResponse(url=end_session_url, status_code=302)
 
 @app.get('/auth/session')
