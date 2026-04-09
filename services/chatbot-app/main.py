@@ -10,12 +10,13 @@ from azure.ai.agents import AgentsClient
 # from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from .logging_agent_event_handler import LoggingAgentEventHandler
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 from .utils import append_jsonl, safe_serialize, utc_now_iso
 from azure.core.exceptions import HttpResponseError
+from fastapi.staticfiles import StaticFiles
 
 
 dotenv.load_dotenv()
@@ -48,6 +49,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key='cambiar-por-una-secret-key-segura',
 )
+app.mount('/static', StaticFiles(directory='services/chatbot-app/static'), name='static')
 
 ACTIVE_RUN_ID_PATTERN = re.compile(r'run_[A-Za-z0-9]+')
 
@@ -622,11 +624,14 @@ async def chat(message: Message, request: Request):
         )
 
         return {
-            'response': assistant_text,
             'thread_id': thread_id,
             'run_id': None,
-            'log_file': str(log_file),
             'status': 'completed_via_stream_fallback',
+            'message': {
+                'role': 'assistant',
+                'content': assistant_text,
+            },
+            'log_file': str(log_file),
         }
 
     if run is None:
@@ -666,11 +671,14 @@ async def chat(message: Message, request: Request):
     )
 
     return {
-        'response': assistant_text,
         'thread_id': thread_id,
         'run_id': getattr(run, 'id', None),
-        'log_file': str(log_file),
         'status': str(getattr(run, 'status', None)),
+        'message': {
+            'role': 'assistant',
+            'content': assistant_text,
+        },
+        'log_file': str(log_file),
     }
 
 @app.post('/chat/reset')
@@ -680,4 +688,70 @@ async def reset_chat(request: Request):
     return {
         'reset': True,
         'previous_thread_id': previous_thread_id,
+    }
+
+@app.get('/chat/ui', response_class=HTMLResponse)
+async def chat_ui():
+    print("Current work directory:", os.getcwd())
+    return FileResponse(
+        # Path('templates/chat.html'),
+        Path('services/chatbot-app/templates/chat.html'),
+        media_type='text/html',
+    )
+
+def _extract_message_text_content(message) -> str:
+    """Extract plain text from a thread message content collection.
+
+    Args:
+        message: Thread message returned by the SDK.
+
+    Returns:
+        A plain text representation of the message content.
+    """
+    content_items = getattr(message, 'content', None)
+    if not content_items:
+        return ''
+
+    text_parts: list[str] = []
+    for item in content_items:
+        item_text = getattr(item, 'text', None)
+        if item_text is None:
+            continue
+
+        item_value = getattr(item_text, 'value', None)
+        if isinstance(item_value, str):
+            text_parts.append(item_value)
+
+    return ''.join(text_parts).strip()
+
+
+@app.get('/chat/history')
+async def chat_history(request: Request):
+    thread_id = request.session.get('thread_id')
+    if not thread_id:
+        return {
+            'thread_id': None,
+            'messages': [],
+        }
+
+    messages = client.messages.list(thread_id=thread_id)
+    visible_messages = []
+
+    for message in reversed(list(messages)):
+        role = getattr(message, 'role', None)
+        if role not in {'user', 'assistant'}:
+            continue
+
+        visible_messages.append(
+            {
+                'message_id': getattr(message, 'id', None),
+                'role': role,
+                'content': _extract_message_text_content(message),
+                'created_at': getattr(message, 'created_at', None),
+            }
+        )
+
+    return {
+        'thread_id': thread_id,
+        'messages': visible_messages,
     }

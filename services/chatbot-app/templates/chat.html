@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>POC Balance Chat</title>
+    <link rel="stylesheet" href="/static/chat.css" />
+</head>
+<body>
+    <main class="chat-page">
+        <section class="chat-shell">
+            <header class="chat-header">
+                <div>
+                    <h1 class="chat-title">POC Balance Chat</h1>
+                    <p class="chat-subtitle">Observable conversation view</p>
+                </div>
+            </header>
+
+            <section class="chat-history-section" aria-label="Conversation history">
+                <div id="chat-history" class="chat-history"></div>
+            </section>
+
+            <section class="chat-composer-section" aria-label="Send message">
+                <form id="chat-form" class="chat-form">
+                    <label class="chat-label" for="chat-message">Message</label>
+                    <textarea
+                        id="chat-message"
+                        class="chat-textarea"
+                        name="message"
+                        rows="4"
+                        placeholder="Write your message"
+                        required
+                    ></textarea>
+                    <div class="chat-actions">
+                        <button id="chat-send-button" class="chat-button" type="submit">
+                            Send
+                        </button>
+                    </div>
+                </form>
+            </section>
+        </section>
+    </main>
+
+    <script src="/static/chat.js"></script>
+</body>
+</html>
