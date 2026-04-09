@@ -405,3 +405,4 @@ sequenceDiagram
     F-->>B: JSON/HTML con respuesta
     B-->>U: Muestra saldo
 ```
+
