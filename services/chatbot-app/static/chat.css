@@ -146,11 +146,18 @@ textarea {
     background: #fdfefe;
     color: #172033;
     outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .chat-textarea:focus {
     border-color: #1f6feb;
     box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.12);
+}
+
+.chat-textarea:disabled {
+    background: #eef4fb;
+    color: #5b6780;
+    cursor: not-allowed;
 }
 
 .chat-actions {
@@ -182,17 +189,40 @@ textarea {
 }
 
 .chat-status {
-    margin-top: 8px;
+    min-height: 24px;
+    margin: 4px 0 0;
+    padding: 10px 12px;
+    border-radius: 10px;
     font-size: 0.9rem;
+    border: 1px solid transparent;
+    background: transparent;
     color: #5b6780;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.chat-status:empty {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
 }
 
 .chat-status-error {
     color: #b42318;
+    background: #fef3f2;
+    border-color: #fecdca;
 }
 
 .chat-status-success {
     color: #027a48;
+    background: #ecfdf3;
+    border-color: #abefc6;
+}
+
+.chat-status-loading {
+    color: #175cd3;
+    background: #eff8ff;
+    border-color: #b2ddff;
 }
 
 @media (max-width: 768px) {

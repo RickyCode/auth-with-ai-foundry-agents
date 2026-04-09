@@ -2,6 +2,20 @@ const chatHistoryElement = document.getElementById('chat-history');
 const chatFormElement = document.getElementById('chat-form');
 const chatMessageElement = document.getElementById('chat-message');
 const chatSendButtonElement = document.getElementById('chat-send-button');
+const chatStatusElement = document.getElementById('chat-status');
+
+function setStatus(message, type = '') {
+    chatStatusElement.textContent = message;
+    chatStatusElement.className = 'chat-status';
+
+    if (type) {
+        chatStatusElement.classList.add(`chat-status-${type}`);
+    }
+}
+
+function clearStatus() {
+    setStatus('');
+}
 
 function createMessageElement(message) {
     const messageElement = document.createElement('article');
@@ -46,10 +60,12 @@ function renderMessages(messages) {
 }
 
 async function loadHistory() {
+    setStatus('Loading conversation...', 'success');
+
     const response = await fetch('/chat/history', {
         method: 'GET',
         headers: {
-            'Accept': 'application/json',
+            Accept: 'application/json',
         },
     });
 
@@ -59,6 +75,7 @@ async function loadHistory() {
 
     const payload = await response.json();
     renderMessages(payload.messages ?? []);
+    setStatus('Conversation loaded.', 'success');
 }
 
 async function sendMessage(message) {
@@ -66,7 +83,7 @@ async function sendMessage(message) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
+            Accept: 'application/json',
         },
         body: JSON.stringify({ message }),
     });
@@ -85,20 +102,26 @@ async function handleChatFormSubmit(event) {
 
     const message = chatMessageElement.value.trim();
     if (!message) {
+        setStatus('Write a message before sending.', 'error');
+
         return;
     }
 
     chatSendButtonElement.disabled = true;
+    chatMessageElement.disabled = true;
+    setStatus('Sending message...', 'success');
 
     try {
         await sendMessage(message);
         chatMessageElement.value = '';
         await loadHistory();
+        setStatus('Message sent successfully.', 'success');
         chatMessageElement.focus();
     } catch (error) {
-        window.alert(error.message);
+        setStatus(error.message, 'error');
     } finally {
         chatSendButtonElement.disabled = false;
+        chatMessageElement.disabled = false;
     }
 }
 
@@ -109,5 +132,5 @@ async function initializeChat() {
 chatFormElement.addEventListener('submit', handleChatFormSubmit);
 
 initializeChat().catch((error) => {
-    window.alert(error.message);
+    setStatus(error.message, 'error');
 });
