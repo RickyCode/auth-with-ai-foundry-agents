@@ -672,3 +672,12 @@ async def chat(message: Message, request: Request):
         'log_file': str(log_file),
         'status': str(getattr(run, 'status', None)),
     }
+
+@app.post('/chat/reset')
+async def reset_chat(request: Request):
+    previous_thread_id = request.session.pop('thread_id', None)
+
+    return {
+        'reset': True,
+        'previous_thread_id': previous_thread_id,
+    }
