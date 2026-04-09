@@ -871,6 +871,7 @@ async def chat_history(request: Request):
     thread_id = request.session.get('thread_id')
     last_run_id = request.session.get('last_run_id')
     conversation_turns = request.session.get('conversation_turns', [])
+
     if not thread_id:
         return {
             'thread_id': None,
@@ -878,44 +879,38 @@ async def chat_history(request: Request):
             'messages': [],
         }
 
-    messages = list(client.messages.list(thread_id=thread_id))
-    ordered_messages = list(reversed(messages))
-    thread_turns = [
-        turn for turn in conversation_turns if turn.get('thread_id') == thread_id
-    ]
-    assistant_turn_index = 0
-    visible_messages = []
+    visible_messages: list[dict] = []
 
-    for message in ordered_messages:
-        role = getattr(message, 'role', None)
-        if role not in {'user', 'assistant'}:
+    for turn in conversation_turns:
+        if turn.get('thread_id') != thread_id:
             continue
 
-        message_content = _extract_message_text_content(message)
-        message_payload = {
-            'message_id': getattr(message, 'id', None),
-            'role': role,
-            'content': message_content,
-            'created_at': getattr(message, 'created_at', None),
-        }
+        user_message = turn.get('user_message', '')
+        assistant_message = turn.get('assistant_message', '')
+        run_id = turn.get('run_id')
+        log_file_path = turn.get('log_file')
+        created_at = turn.get('created_at')
 
-        if role == 'assistant':
-            matching_turn = None
-            if assistant_turn_index < len(thread_turns):
-                matching_turn = thread_turns[assistant_turn_index]
-                assistant_turn_index += 1
+        visible_messages.append(
+            {
+                'message_id': None,
+                'role': 'user',
+                'content': user_message,
+                'created_at': created_at,
+            }
+        )
 
-            if matching_turn is not None:
-                log_file_path = matching_turn.get('log_file')
-                message_payload['run_id'] = matching_turn.get('run_id')
-                message_payload['log_file'] = log_file_path
-                message_payload['stream_events'] = _get_stream_events_for_turn(log_file_path)
-            else:
-                message_payload['run_id'] = None
-                message_payload['log_file'] = None
-                message_payload['stream_events'] = []
-
-        visible_messages.append(message_payload)
+        visible_messages.append(
+            {
+                'message_id': None,
+                'role': 'assistant',
+                'content': assistant_message,
+                'created_at': created_at,
+                'run_id': run_id,
+                'log_file': log_file_path,
+                'stream_events': _get_stream_events_for_turn(log_file_path) if log_file_path else [],
+            }
+        )
 
     return {
         'thread_id': thread_id,
