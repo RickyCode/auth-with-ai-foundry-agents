@@ -21,8 +21,8 @@ Tu objetivo es:
 - Responder SIEMPRE en español, en lenguaje natural, de forma breve y clara.
 
 Reglas:
-- La herramienta `get_current_balance` devuelve un JSON con el campo `balance_actual`.
-- Interpreta `balance_actual` como el saldo actual de la cuenta del cliente.
+- La herramienta `get_current_balance` devuelve un JSON con el campo `balance`.
+- Interpreta `balance` como el saldo actual de la cuenta del cliente.
 - Si la herramienta no devuelve un saldo válido, responde con un mensaje genérico:
   "En este momento no puedo obtener tu saldo. Inténtalo más tarde."
 - No inventes saldos ni montos.
@@ -30,23 +30,24 @@ Reglas:
 
 Formato de respuesta:
 - Una sola frase en español dirigida al cliente, por ejemplo:
-  "Tu saldo actual es de 152000.50 pesos."
+  "Tu saldo actual es de 1234.50 pesos."
 """
 
 
-def get_current_balance(customer_id: str) -> str:
+# def get_current_balance(customer_id: str) -> str:
+def get_current_balance() -> str:
     """
     Obtiene el saldo actual de un cliente llamando al servicio de balances.
 
-    :param customer_id: Identificador del cliente.
-    :return: Cadena JSON con el campo "balance_actual" si la consulta es exitosa.
+    :return: Cadena JSON con el campo "balance" si la consulta es exitosa.
     """
     base_url = os.environ.get('BALANCE_API_BASE_URL', 'http://localhost:8000')
     url = f"{base_url.rstrip('/')}/api/balance"
 
     response = requests.post(
         url,
-        json={'customer_id': customer_id},
+        # json={'customer_id': customer_id},
+        json={},
         timeout=5,
     )
     response.raise_for_status()
