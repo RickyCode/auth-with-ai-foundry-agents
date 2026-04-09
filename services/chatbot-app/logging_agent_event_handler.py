@@ -35,7 +35,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
         self.assistant_text_parts: list[str] = []
         self.last_error: Any = None
 
-
     def _log(self, record: dict) -> None:
         append_jsonl(
             self.log_file,
@@ -45,7 +44,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             },
         )
 
-
     def on_event(self, event_type, event_data, *args, **kwargs) -> None:
         self._log(
             {
@@ -54,7 +52,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                 'data': safe_serialize(event_data),
             }
         )
-
 
     def on_message_delta(self, delta: MessageDeltaChunk) -> None:
         text_value = None
@@ -72,7 +69,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             }
         )
 
-
     def on_message_done(self, message: ThreadMessage) -> None:
         self._log(
             {
@@ -83,7 +79,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                 'content': safe_serialize(getattr(message, 'content', None)),
             }
         )
-
 
     def on_run_step(self, step: RunStep) -> None:
         step_run_id = getattr(step, 'run_id', None)
@@ -99,7 +94,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             }
         )
 
-
     def on_run_step_done(self, step: RunStep) -> None:
         step_run_id = getattr(step, 'run_id', None)
         if step_run_id:
@@ -114,7 +108,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             }
         )
 
-
     def on_run(self, run: ThreadRun) -> None:
         self.run_id = getattr(run, 'id', None)
         self._log(
@@ -126,7 +119,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                 'last_error': safe_serialize(getattr(run, 'last_error', None)),
             }
         )
-
 
     def on_run_done(self, run: ThreadRun) -> None:
         self.run_id = getattr(run, 'id', None)
@@ -140,7 +132,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             }
         )
 
-
     def on_error(self, data: Any) -> None:
         self.last_error = data
         self._log(
@@ -150,10 +141,8 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             }
         )
 
-
     def on_done(self) -> None:
         self._log({'type': 'stream_done'})
-
 
     def on_unhandled_event(self, event_type, event_data) -> None:
         self._log(
@@ -163,7 +152,6 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
                 'data': safe_serialize(event_data),
             }
         )
-
 
     def on_run_requires_action(self, run: ThreadRun) -> None:
         self.run_id = getattr(run, 'id', None)

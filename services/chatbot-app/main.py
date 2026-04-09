@@ -6,18 +6,18 @@ from pathlib import Path
 import dotenv
 import requests
 from azure.ai.agents import AgentsClient
+from azure.core.exceptions import HttpResponseError
 
 # from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
-from .logging_agent_event_handler import LoggingAgentEventHandler
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
-from .utils import append_jsonl, safe_serialize, utc_now_iso
-from azure.core.exceptions import HttpResponseError
-from fastapi.staticfiles import StaticFiles
 
+from .logging_agent_event_handler import LoggingAgentEventHandler
+from .utils import append_jsonl, safe_serialize, utc_now_iso
 
 dotenv.load_dotenv()
 
@@ -54,38 +54,38 @@ app.mount('/static', StaticFiles(directory='services/chatbot-app/static'), name=
 ACTIVE_RUN_ID_PATTERN = re.compile(r'run_[A-Za-z0-9]+')
 
 
-def _extract_assistant_text(value) -> str:
-    """Extract a plain text representation from an assistant response value.
+# def _extract_assistant_text(value) -> str:
+#     """Extract a plain text representation from an assistant response value.
 
-    Args:
-        value: Assistant response value returned by the SDK or built locally.
+#     Args:
+#         value: Assistant response value returned by the SDK or built locally.
 
-    Returns:
-        A plain text string safe to log and return in JSON responses.
-    """
-    if value is None:
-        return ''
+#     Returns:
+#         A plain text string safe to log and return in JSON responses.
+#     """
+#     if value is None:
+#         return ''
 
-    if isinstance(value, str):
-        return value.strip()
+#     if isinstance(value, str):
+#         return value.strip()
 
-    text_value = getattr(value, 'text', None)
-    if isinstance(text_value, str):
-        return text_value.strip()
+#     text_value = getattr(value, 'text', None)
+#     if isinstance(text_value, str):
+#         return text_value.strip()
 
-    nested_value = getattr(text_value, 'value', None)
-    if isinstance(nested_value, str):
-        return nested_value.strip()
+#     nested_value = getattr(text_value, 'value', None)
+#     if isinstance(nested_value, str):
+#         return nested_value.strip()
 
-    direct_value = getattr(value, 'value', None)
-    if isinstance(direct_value, str):
-        return direct_value.strip()
+#     direct_value = getattr(value, 'value', None)
+#     if isinstance(direct_value, str):
+#         return direct_value.strip()
 
-    serialized_value = safe_serialize(value)
-    if isinstance(serialized_value, str):
-        return serialized_value.strip()
+#     serialized_value = safe_serialize(value)
+#     if isinstance(serialized_value, str):
+#         return serialized_value.strip()
 
-    return str(serialized_value).strip()
+#     return str(serialized_value).strip()
 
 
 def _extract_active_run_id(error: HttpResponseError) -> str | None:
@@ -103,6 +103,7 @@ def _extract_active_run_id(error: HttpResponseError) -> str | None:
         return None
 
     return match.group(0)
+
 
 def _create_new_thread(request: Request, log_file: Path | None = None) -> str:
     """Create a new thread and persist it in session.
@@ -147,33 +148,6 @@ def _get_or_create_thread_id(request: Request) -> tuple[str, bool]:
     thread_id = _create_new_thread(request=request)
 
     return thread_id, True
-
-
-def _wait_for_run_to_finish(thread_id: str, run_id: str, timeout_seconds: int = 20) -> None:
-    """Wait until a run reaches a terminal state.
-
-    Args:
-        thread_id: Thread identifier.
-        run_id: Run identifier.
-        timeout_seconds: Maximum wait time in seconds.
-
-    Raises:
-        RuntimeError: If the run does not finish before timeout.
-    """
-    terminal_statuses = {'completed', 'failed', 'cancelled', 'expired', 'incomplete'}
-    deadline = time.time() + timeout_seconds
-
-    while time.time() < deadline:
-        run = client.runs.get(thread_id=thread_id, run_id=run_id)
-        status = str(getattr(run, 'status', '')).lower()
-
-        if status in terminal_statuses:
-
-            return
-
-        time.sleep(0.75)
-
-    raise RuntimeError(f'active run did not finish in time: {run_id}')
 
 
 def _wait_for_run_to_finish(thread_id: str, run_id: str, timeout_seconds: int = 8) -> None:
@@ -288,6 +262,7 @@ def _create_user_message(
             )
 
             return new_thread_id
+
 
 def _poll_run_until_terminal(
     thread_id: str,
@@ -490,7 +465,6 @@ class Message(BaseModel):
 #     return {"response": last_text}
 
 
-
 def _extract_assistant_text(value) -> str:
     """Extract a plain text representation from an assistant response value.
 
@@ -523,6 +497,7 @@ def _extract_assistant_text(value) -> str:
         return serialized_value.strip()
 
     return str(serialized_value).strip()
+
 
 @app.post('/chat')
 async def chat(message: Message, request: Request):
@@ -681,6 +656,7 @@ async def chat(message: Message, request: Request):
         'log_file': str(log_file),
     }
 
+
 @app.post('/chat/reset')
 async def reset_chat(request: Request):
     previous_thread_id = request.session.pop('thread_id', None)
@@ -690,14 +666,16 @@ async def reset_chat(request: Request):
         'previous_thread_id': previous_thread_id,
     }
 
+
 @app.get('/chat/ui', response_class=HTMLResponse)
 async def chat_ui():
-    print("Current work directory:", os.getcwd())
+    print('Current work directory:', os.getcwd())
     return FileResponse(
         # Path('templates/chat.html'),
         Path('services/chatbot-app/templates/chat.html'),
         media_type='text/html',
     )
+
 
 def _extract_message_text_content(message) -> str:
     """Extract plain text from a thread message content collection.
