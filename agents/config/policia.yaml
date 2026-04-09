@@ -1,0 +1,8 @@
+id: asst_NE6uzsXcin8kUgSbnxHX8zKr
+name: agente-policia-saldo
+description: "Agente que normaliza texto y filtra intents para consultas de saldo."
+model: gpt-4.1-mini
+temperature: 0.2
+max_output_tokens: 256
+prompt_file: "../prompts/policia.prompt"
+response_format: "json"

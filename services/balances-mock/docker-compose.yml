@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  balances-mock:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: balances-mock
+    ports:
+      - "8000:8000"
+    environment:
+      FLASK_ENV: production
+    restart: unless-stopped
