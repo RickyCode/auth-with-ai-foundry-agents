@@ -21,7 +21,7 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
         client,
         thread_id: str,
         log_file: Path,
-        access_token: str,
+        access_token: str | None,
         balance_api_url: str,
     ) -> None:
         super().__init__()
@@ -181,6 +181,19 @@ class LoggingAgentEventHandler(AgentEventHandler[str]):
             if function_name == 'get_current_balance':
                 started = time.perf_counter()
                 try:
+                    # headers = {
+                    #     'Content-Type': 'application/json',
+                    # }
+
+                    # if self.access_token:
+                    #     headers['Authorization'] = f'Bearer {self.access_token}'
+
+                    # response = requests.post(
+                    #     self.balance_api_url,
+                    #     headers=headers,
+                    #     json={},
+                    #     timeout=10,
+                    # )
                     response = requests.post(
                         self.balance_api_url,
                         headers={

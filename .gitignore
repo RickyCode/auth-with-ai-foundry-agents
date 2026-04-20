@@ -210,5 +210,6 @@ __marimo__/
 
 # # ----------------------
 
-.forgeflow
-.logs
+.forgeflow/
+.logs/
+logs/

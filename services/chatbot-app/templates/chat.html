@@ -9,39 +9,105 @@
 <body>
     <main class="chat-page">
         <section class="chat-shell">
-            <header class="chat-header">
-                <div>
-                    <h1 class="chat-title">POC Balance Chat</h1>
-                    <p class="chat-subtitle">Observable conversation view</p>
-                </div>
-            </header>
-
-            <section class="chat-history-section" aria-label="Conversation history">
-                <div id="chat-history" class="chat-history"></div>
-            </section>
-
-            <section class="chat-composer-section" aria-label="Send message">
-                <form id="chat-form" class="chat-form">
-                    <label class="chat-label" for="chat-message">Message</label>
-                    <textarea
-                        id="chat-message"
-                        class="chat-textarea"
-                        name="message"
-                        rows="4"
-                        placeholder="Write your message"
-                        required
-                    ></textarea>
-                    <div class="chat-actions">
-                        <button id="chat-send-button" class="chat-button" type="submit">
-                            Send
+            <aside class="chat-sidebar" aria-label="Conversation metadata">
+                <div class="chat-sidebar-card">
+                    <h2 class="chat-sidebar-title">Conversation</h2>
+                    <div class="chat-metadata">
+                        <span class="chat-metadata-label">Thread ID</span>
+                        <code id="chat-thread-id" class="chat-metadata-value">-</code>
+                    </div>
+                    <div class="chat-metadata">
+                        <span class="chat-metadata-label">Last Run ID</span>
+                        <code id="chat-run-id" class="chat-metadata-value">-</code>
+                    </div>
+                    <div class="chat-sidebar-actions">
+                        <button
+                            id="chat-reset-button"
+                            class="chat-button chat-button-secondary"
+                            type="button"
+                        >
+                            Reset conversation
                         </button>
                     </div>
-                    <p id="chat-status" class="chat-status" aria-live="polite"></p>
-                </form>
+                </div>
+            </aside>
+
+            <section class="chat-main">
+                <header class="chat-header">
+                    <div>
+                        <h1 class="chat-title">POC Balance Chat</h1>
+                        <p class="chat-subtitle">Observable conversation view</p>
+                    </div>
+                </header>
+
+                <section class="chat-history-section" aria-label="Conversation history">
+                    <p class="chat-history-hint">
+                        Assistant messages can include an expandable list of stream events executed before each response.
+                    </p>
+                    <div id="chat-history" class="chat-history"></div>
+                </section>
+
+                <section class="chat-composer-section" aria-label="Send message">
+                    <form id="chat-form" class="chat-form">
+                        <label class="chat-label" for="chat-message">Message</label>
+                        <textarea
+                            id="chat-message"
+                            class="chat-textarea"
+                            name="message"
+                            rows="4"
+                            placeholder="Write your message"
+                            required
+                        ></textarea>
+                        <div class="chat-actions">
+                            <button id="chat-send-button" class="chat-button" type="submit">
+                                Send
+                            </button>
+                        </div>
+                        <p id="chat-status" class="chat-status" aria-live="polite"></p>
+                    </form>
+                </section>
             </section>
+
+            <aside class="auth-sidebar" aria-label="Authentication panel">
+                <div class="auth-sidebar-card">
+                    <h2 class="chat-sidebar-title">Authentication</h2>
+
+                    <div class="chat-metadata">
+                        <span class="chat-metadata-label">Session status</span>
+                        <code id="auth-session-status" class="chat-metadata-value">Guest</code>
+                    </div>
+
+                    <div class="chat-sidebar-actions">
+                        <a id="auth-login-link" class="chat-button auth-link-button" href="/login">
+                            Login
+                        </a>
+                        <a
+                            id="auth-logout-link"
+                            class="chat-button chat-button-secondary auth-link-button"
+                            href="/logout"
+                        >
+                            Logout
+                        </a>
+                    </div>
+
+                    <div id="auth-claims-section" class="auth-claims-section auth-claims-section-hidden">
+                        <span class="chat-metadata-label">Access token claims</span>
+                        <div class="auth-claims-table-wrapper">
+                            <table class="auth-claims-table">
+                                <thead>
+                                    <tr>
+                                        <th>Claim</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="auth-claims-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </aside>
         </section>
     </main>
-
     <script src="/static/chat.js"></script>
 </body>
 </html>

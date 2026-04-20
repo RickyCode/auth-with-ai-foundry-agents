@@ -3,6 +3,12 @@ const chatFormElement = document.getElementById('chat-form');
 const chatMessageElement = document.getElementById('chat-message');
 const chatSendButtonElement = document.getElementById('chat-send-button');
 const chatStatusElement = document.getElementById('chat-status');
+const chatThreadIdElement = document.getElementById('chat-thread-id');
+const chatRunIdElement = document.getElementById('chat-run-id');
+const chatResetButtonElement = document.getElementById('chat-reset-button');
+const authSessionStatusElement = document.getElementById('auth-session-status');
+const authClaimsSectionElement = document.getElementById('auth-claims-section');
+const authClaimsBodyElement = document.getElementById('auth-claims-body');
 
 function setStatus(message, type = '') {
     chatStatusElement.textContent = message;
@@ -17,7 +23,176 @@ function clearStatus() {
     setStatus('');
 }
 
+function renderConversationMetadata(threadId, lastRunId) {
+    if (threadId !== undefined) {
+        chatThreadIdElement.textContent = threadId ?? '-';
+    }
+
+    if (lastRunId !== undefined && lastRunId !== null && lastRunId !== '') {
+        chatRunIdElement.textContent = lastRunId;
+    }
+}
+
+function clearConversationMetadata() {
+    chatThreadIdElement.textContent = '-';
+    chatRunIdElement.textContent = '-';
+}
+
+function formatClaimValue(value) {
+    if (value === null || value === undefined) {
+        return '-';
+    }
+
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+    }
+
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch {
+        return String(value);
+    }
+}
+
+function clearAuthSessionView() {
+    authSessionStatusElement.textContent = 'Guest';
+    authClaimsBodyElement.innerHTML = '';
+    authClaimsSectionElement.classList.add('auth-claims-section-hidden');
+}
+
+function renderAuthClaims(claims) {
+    authClaimsBodyElement.innerHTML = '';
+
+    const claimEntries = Object.entries(claims ?? {});
+
+    if (claimEntries.length === 0) {
+        authClaimsSectionElement.classList.add('auth-claims-section-hidden');
+        return;
+    }
+
+    for (const [claimName, claimValue] of claimEntries) {
+        const rowElement = document.createElement('tr');
+
+        const nameCellElement = document.createElement('td');
+        nameCellElement.textContent = claimName;
+
+        const valueCellElement = document.createElement('td');
+        valueCellElement.textContent = formatClaimValue(claimValue);
+
+        rowElement.appendChild(nameCellElement);
+        rowElement.appendChild(valueCellElement);
+        authClaimsBodyElement.appendChild(rowElement);
+    }
+
+    authClaimsSectionElement.classList.remove('auth-claims-section-hidden');
+}
+
+function renderAuthSession(payload) {
+    if (!payload?.is_authenticated) {
+        clearAuthSessionView();
+        return;
+    }
+
+    authSessionStatusElement.textContent = 'Authenticated';
+    renderAuthClaims(payload.claims ?? {});
+}
+
+async function loadAuthSession() {
+    const response = await fetch('/auth/session', {
+        method: 'GET',
+        headers: {
+            Accept: 'application/json',
+        },
+        cache: 'no-store',
+    });
+
+    if (!response.ok) {
+        throw new Error('Unable to load authentication session.');
+    }
+
+    const payload = await response.json();
+    renderAuthSession(payload);
+}
+
+function formatEventTimestamp(timestamp) {
+    if (!timestamp) {
+        return '-';
+    }
+
+    const parsedDate = new Date(timestamp);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+        return timestamp;
+    }
+
+    const year = parsedDate.getFullYear();
+    const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(parsedDate.getDate()).padStart(2, '0');
+    const hours = String(parsedDate.getHours()).padStart(2, '0');
+    const minutes = String(parsedDate.getMinutes()).padStart(2, '0');
+    const seconds = String(parsedDate.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+function createStreamEventElement(event) {
+    const itemElement = document.createElement('li');
+    itemElement.className = 'chat-stream-event';
+
+    const timestampElement = document.createElement('span');
+    timestampElement.className = 'chat-stream-event-timestamp';
+    timestampElement.textContent = formatEventTimestamp(event.timestamp);
+
+    const typeElement = document.createElement('span');
+    typeElement.className = 'chat-stream-event-type';
+    typeElement.textContent = event.event_type ?? '-';
+
+    const summaryElement = document.createElement('p');
+    summaryElement.className = 'chat-stream-event-summary';
+    summaryElement.textContent = event.summary ?? '';
+
+    itemElement.appendChild(timestampElement);
+    itemElement.appendChild(typeElement);
+    itemElement.appendChild(summaryElement);
+
+    return itemElement;
+}
+
+function createStreamEventsElement(message) {
+    const streamEvents = Array.isArray(message.stream_events) ? message.stream_events : [];
+    if (message.role !== 'assistant' || streamEvents.length === 0) {
+        return null;
+    }
+
+    const detailsElement = document.createElement('details');
+    detailsElement.className = 'chat-stream-details';
+
+    const summaryElement = document.createElement('summary');
+    summaryElement.className = 'chat-stream-summary';
+    summaryElement.textContent = `Stream events (${streamEvents.length})`;
+
+    const listElement = document.createElement('ol');
+    listElement.className = 'chat-stream-events';
+
+    for (const event of streamEvents) {
+        listElement.appendChild(createStreamEventElement(event));
+    }
+
+    detailsElement.appendChild(summaryElement);
+    detailsElement.appendChild(listElement);
+
+    return detailsElement;
+}
+
 function createMessageElement(message) {
+    const wrapperElement = document.createElement('div');
+    wrapperElement.className = 'chat-message-block';
+
+    const streamEventsElement = createStreamEventsElement(message);
+    if (streamEventsElement !== null) {
+        wrapperElement.appendChild(streamEventsElement);
+    }
+
     const messageElement = document.createElement('article');
     messageElement.className = `chat-message chat-message-${message.role}`;
 
@@ -31,8 +206,9 @@ function createMessageElement(message) {
 
     messageElement.appendChild(roleElement);
     messageElement.appendChild(contentElement);
+    wrapperElement.appendChild(messageElement);
 
-    return messageElement;
+    return wrapperElement;
 }
 
 function createEmptyStateElement() {
@@ -60,13 +236,14 @@ function renderMessages(messages) {
 }
 
 async function loadHistory() {
-    setStatus('Loading conversation...', 'success');
+    setStatus('Loading conversation...', 'loading');
 
     const response = await fetch('/chat/history', {
         method: 'GET',
         headers: {
             Accept: 'application/json',
         },
+        cache: 'no-store',
     });
 
     if (!response.ok) {
@@ -74,6 +251,13 @@ async function loadHistory() {
     }
 
     const payload = await response.json();
+
+    if (payload.thread_id === null) {
+        clearConversationMetadata();
+    } else {
+        renderConversationMetadata(payload.thread_id, payload.last_run_id);
+    }
+
     renderMessages(payload.messages ?? []);
     setStatus('Conversation loaded.', 'success');
 }
@@ -97,6 +281,23 @@ async function sendMessage(message) {
     return payload;
 }
 
+async function resetConversation() {
+    const response = await fetch('/chat/reset', {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+        },
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+        throw new Error(payload.error ?? 'Unable to reset conversation.');
+    }
+
+    return payload;
+}
+
 async function handleChatFormSubmit(event) {
     event.preventDefault();
 
@@ -108,12 +309,14 @@ async function handleChatFormSubmit(event) {
     }
 
     chatSendButtonElement.disabled = true;
+    chatResetButtonElement.disabled = true;
     chatMessageElement.disabled = true;
-    setStatus('Sending message...', 'success');
+    setStatus('Sending message...', 'loading');
 
     try {
-        await sendMessage(message);
+        const payload = await sendMessage(message);
         chatMessageElement.value = '';
+        renderConversationMetadata(payload.thread_id, payload.run_id);
         await loadHistory();
         setStatus('Message sent successfully.', 'success');
         chatMessageElement.focus();
@@ -121,16 +324,64 @@ async function handleChatFormSubmit(event) {
         setStatus(error.message, 'error');
     } finally {
         chatSendButtonElement.disabled = false;
+        chatResetButtonElement.disabled = false;
+        chatMessageElement.disabled = false;
+    }
+}
+
+function handleChatMessageKeydown(event) {
+    if (event.key !== 'Enter') {
+        return;
+    }
+
+    if (event.ctrlKey === false) {
+        return;
+    }
+
+    event.preventDefault();
+
+    if (chatSendButtonElement.disabled) {
+        return;
+    }
+
+    chatFormElement.requestSubmit();
+}
+
+async function handleResetClick() {
+    chatSendButtonElement.disabled = true;
+    chatResetButtonElement.disabled = true;
+    chatMessageElement.disabled = true;
+    setStatus('Resetting conversation...', 'loading');
+
+    try {
+        await resetConversation();
+        chatMessageElement.value = '';
+        await loadHistory();
+        setStatus('Conversation reset.', 'success');
+        chatMessageElement.focus();
+    } catch (error) {
+        setStatus(error.message, 'error');
+    } finally {
+        chatSendButtonElement.disabled = false;
+        chatResetButtonElement.disabled = false;
         chatMessageElement.disabled = false;
     }
 }
 
 async function initializeChat() {
-    await loadHistory();
+    await Promise.all([
+        loadHistory(),
+        loadAuthSession(),
+    ]);
+
+    clearStatus();
 }
 
 chatFormElement.addEventListener('submit', handleChatFormSubmit);
+chatResetButtonElement.addEventListener('click', handleResetClick);
+chatMessageElement.addEventListener('keydown', handleChatMessageKeydown);
 
 initializeChat().catch((error) => {
     setStatus(error.message, 'error');
 });
+
