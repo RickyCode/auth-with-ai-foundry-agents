@@ -45,7 +45,7 @@ BALANCE_AGENT_ID = os.getenv('BALANCE_AGENT_ID')
 
 BALANCE_API_BASE_URL = os.getenv('BALANCE_API_BASE_URL')
 
-LOG_DIR = Path('logs/agents')
+LOG_DIR = Path('.logs/agents')
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # TURN_DB_PATH = Path('logs/conversations/conversation_turns.db')

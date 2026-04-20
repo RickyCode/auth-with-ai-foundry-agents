@@ -1,7 +1,7 @@
 import sqlite3
 from pathlib import Path
 
-TURN_DB_PATH = Path('logs/conversations/conversation_turns.db')
+TURN_DB_PATH = Path('.logs/conversations/conversation_turns.db')
 TURN_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
