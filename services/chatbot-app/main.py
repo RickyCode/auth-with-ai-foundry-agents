@@ -1,11 +1,10 @@
+import base64
+import json
 import os
 import re
 import time
-import json
 from pathlib import Path
-import base64
 from urllib.parse import urlencode
-import sqlite3
 
 import dotenv
 import requests
@@ -20,15 +19,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 
+from .helpers.turns import (
+    _append_conversation_turn_to_db,
+    _delete_conversation_turns,
+    _initialize_turns_database,
+    _read_conversation_turns,
+)
 from .logging_agent_event_handler import LoggingAgentEventHandler
 from .utils import append_jsonl, safe_serialize, utc_now_iso
-from .helpers.turns import (
-    _get_turns_connection,
-    _initialize_turns_database,
-    _append_conversation_turn_to_db,
-    _read_conversation_turns,
-    _delete_conversation_turns,
-)
 
 dotenv.load_dotenv()
 
@@ -68,6 +66,7 @@ app.add_middleware(
 app.mount('/static', StaticFiles(directory='services/chatbot-app/static'), name='static')
 
 ACTIVE_RUN_ID_PATTERN = re.compile(r'run_[A-Za-z0-9]+')
+
 
 def _base64url_decode(value: str) -> bytes:
     """Decode a base64url string."""
@@ -112,10 +111,7 @@ def _get_end_session_url(id_token_hint: str | None) -> str:
     if id_token_hint:
         query_params['id_token_hint'] = id_token_hint
 
-    return (
-        f'{KEYCLOAK_BASE_URL}/realms/{REALM_NAME}/protocol/openid-connect/logout'
-        f'?{urlencode(query_params)}'
-    )
+    return f'{KEYCLOAK_BASE_URL}/realms/{REALM_NAME}/protocol/openid-connect/logout' f'?{urlencode(query_params)}'
 
 
 # def _extract_assistant_text(value) -> str:
@@ -434,6 +430,7 @@ async def logout(request: Request):
     end_session_url = _get_end_session_url(id_token_hint=None)
     request.session.clear()
     return RedirectResponse(url=end_session_url, status_code=302)
+
 
 @app.get('/auth/session')
 async def auth_session(request: Request):
@@ -822,6 +819,7 @@ def _extract_message_text_content(message) -> str:
 #     )
 #     request.session['conversation_turns'] = conversation_turns
 
+
 def _append_conversation_turn(
     request: Request,
     thread_id: str,
@@ -887,26 +885,58 @@ def _summarize_stream_event(record: dict) -> dict | None:
     """
     event_type = record.get('type')
     timestamp = record.get('timestamp')
+    function_name = record.get('function_name')
+    # status_code = record.get('status_code')
     if not event_type or not timestamp:
         return None
 
-    if event_type == 'thread_created':
-        summary = 'Conversation thread created.'
-    elif event_type == 'user_message_created':
-        summary = 'User message accepted.'
-    elif event_type == 'run':
-        summary = 'Run started.'
-    elif event_type == 'run_step':
-        step_status = record.get('step_status')
-        summary = f'Run step update ({step_status}).' if step_status else 'Run step update.'
-    elif event_type == 'run_step_done':
-        step_status = record.get('step_status')
-        summary = f'Run step finished ({step_status}).' if step_status else 'Run step finished.'
-    elif event_type == 'run_requires_action':
-        summary = 'Run requires tool output.'
-    elif event_type == 'tool_call_received':
-        function_name = record.get('function_name')
-        summary = f'Tool call requested: {function_name}.' if function_name else 'Tool call requested.'
+    event_type_switch = {
+        'thread_created': 'Conversation thread created',
+        'user_message_created': 'User message accepted',
+        'run': 'Run started',
+        'run_step': 'Run step update',
+        'run_step_done': 'Run step finished',
+        'run_requires_action': 'Run requires tool output',
+        'tool_call_received': f'Tool call requested: {function_name}.' if function_name else 'Tool call requested.',
+        'tool_backend_exception': f'Tool execution failed in {function_name}.'
+        if function_name
+        else 'Tool execution failed.',
+        'submit_tool_outputs': 'Tool outputs submitted.',
+        'submit_tool_outputs_stream': 'Tool outputs submitted through stream.',
+        'message_done': 'Assistant message completed.',
+        'message_delta': 'Assistant partial response received.',
+        'run_done': 'Run finished.',
+        'stream_done': 'Stream finished.',
+        'stream_error': 'Stream error detected.',
+        'active_run_detected': 'Previous run still active.',
+        'active_run_finished_after_wait': 'Previous run finished after waiting.',
+        'thread_recreated_after_stuck_run': 'Conversation thread recreated after blocked run.',
+        'requires_action_detected_in_chat': 'Chat flow detected required action.',
+        'final_response': 'Final assistant response prepared.',
+    }
+
+    # if event_type == 'thread_created':
+    #     summary = 'Conversation thread created.'
+    # elif event_type == 'user_message_created':
+    #     summary = 'User message accepted.'
+    # elif event_type == 'run':
+    #     summary = 'Run started.'
+    # elif event_type == 'run_step':
+    #     step_status = record.get('step_status')
+    #     summary = f'Run step update ({step_status}).' if step_status else 'Run step update.'
+    # elif event_type == 'run_step_done':
+    #     step_status = record.get('step_status')
+    #     summary = f'Run step finished ({step_status}).' if step_status else 'Run step finished.'
+    # elif event_type == 'run_requires_action':
+    #     summary = 'Run requires tool output.'
+
+    # elif event_type == 'tool_call_received':
+    #     function_name = record.get('function_name')
+    #     summary = f'Tool call requested: {function_name}.' if function_name else 'Tool call requested.'
+
+    if event_type in event_type_switch.keys():
+        summary = event_type_switch[event_type]
+
     elif event_type == 'tool_backend_response':
         function_name = record.get('function_name')
         status_code = record.get('status_code')
@@ -914,35 +944,50 @@ def _summarize_stream_event(record: dict) -> dict | None:
             summary = f'Tool response received from {function_name} ({status_code}).'
         else:
             summary = 'Tool backend response received.'
-    elif event_type == 'tool_backend_exception':
-        function_name = record.get('function_name')
-        summary = f'Tool execution failed in {function_name}.' if function_name else 'Tool execution failed.'
-    elif event_type == 'submit_tool_outputs':
-        summary = 'Tool outputs submitted.'
-    elif event_type == 'submit_tool_outputs_stream':
-        summary = 'Tool outputs submitted through stream.'
-    elif event_type == 'message_done':
-        summary = 'Assistant message completed.'
-    elif event_type == 'message_delta':
-        summary = 'Assistant partial response received.'
-    elif event_type == 'run_done':
-        summary = 'Run finished.'
-    elif event_type == 'stream_done':
-        summary = 'Stream finished.'
-    elif event_type == 'stream_error':
-        summary = 'Stream error detected.'
-    elif event_type == 'active_run_detected':
-        summary = 'Previous run still active.'
-    elif event_type == 'active_run_finished_after_wait':
-        summary = 'Previous run finished after waiting.'
-    elif event_type == 'thread_recreated_after_stuck_run':
-        summary = 'Conversation thread recreated after blocked run.'
-    elif event_type == 'requires_action_detected_in_chat':
-        summary = 'Chat flow detected required action.'
-    elif event_type == 'final_response':
-        summary = 'Final assistant response prepared.'
+
+    # elif event_type == 'tool_backend_exception':
+    #     function_name = record.get('function_name')
+    #     summary = f'Tool execution failed in {function_name}.' if function_name else 'Tool execution failed.'
+
+    # elif event_type == 'submit_tool_outputs':
+    #     summary = 'Tool outputs submitted.'
+
+    # elif event_type == 'submit_tool_outputs_stream':
+    #     summary = 'Tool outputs submitted through stream.'
+
+    # elif event_type == 'message_done':
+    #     summary = 'Assistant message completed.'
+
+    # elif event_type == 'message_delta':
+    #     summary = 'Assistant partial response received.'
+
+    # elif event_type == 'run_done':
+    #     summary = 'Run finished.'
+
+    # elif event_type == 'stream_done':
+    #     summary = 'Stream finished.'
+
+    # elif event_type == 'stream_error':
+    #     summary = 'Stream error detected.'
+
+    # elif event_type == 'active_run_detected':
+    #     summary = 'Previous run still active.'
+
+    # elif event_type == 'active_run_finished_after_wait':
+    #     summary = 'Previous run finished after waiting.'
+
+    # elif event_type == 'thread_recreated_after_stuck_run':
+    #     summary = 'Conversation thread recreated after blocked run.'
+
+    # elif event_type == 'requires_action_detected_in_chat':
+    #     summary = 'Chat flow detected required action.'
+
+    # elif event_type == 'final_response':
+    #     summary = 'Final assistant response prepared.'
+    # else:
+    #     return None
     else:
-        return None
+        summary = None
 
     return {
         'timestamp': timestamp,
@@ -1025,6 +1070,7 @@ def _get_stream_events_for_turn(log_file_path: str) -> list[dict]:
 #         'messages': visible_messages,
 #     }
 
+
 @app.get('/chat/history')
 async def chat_history(request: Request):
     thread_id = request.session.get('thread_id')
@@ -1073,6 +1119,7 @@ async def chat_history(request: Request):
         'last_run_id': last_run_id,
         'messages': visible_messages,
     }
+
 
 @app.post('/chat/reset')
 async def reset_chat(request: Request):
