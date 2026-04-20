@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import base64
 from urllib.parse import urlencode
+import sqlite3
 
 import dotenv
 import requests
@@ -21,6 +22,13 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .logging_agent_event_handler import LoggingAgentEventHandler
 from .utils import append_jsonl, safe_serialize, utc_now_iso
+from .helpers.turns import (
+    _get_turns_connection,
+    _initialize_turns_database,
+    _append_conversation_turn_to_db,
+    _read_conversation_turns,
+    _delete_conversation_turns,
+)
 
 dotenv.load_dotenv()
 
@@ -42,11 +50,16 @@ BALANCE_API_BASE_URL = os.getenv('BALANCE_API_BASE_URL')
 LOG_DIR = Path('logs/agents')
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+# TURN_DB_PATH = Path('logs/conversations/conversation_turns.db')
+# TURN_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 balance_api_url = f'{BALANCE_API_BASE_URL}/api/balance'
 
 client = AgentsClient(endpoint=PROJECT_ENDPOINT, credential=DefaultAzureCredential())
 
 app = FastAPI(title='POC Balance Chat')
+
+_initialize_turns_database()
 
 app.add_middleware(
     SessionMiddleware,
@@ -778,6 +791,37 @@ def _extract_message_text_content(message) -> str:
     return ''.join(text_parts).strip()
 
 
+# def _append_conversation_turn(
+#     request: Request,
+#     thread_id: str,
+#     user_message: str,
+#     assistant_message: str,
+#     run_id: str | None,
+#     log_file: Path,
+# ) -> None:
+#     """Persist conversation turn metadata in session.
+
+#     Args:
+#         request: FastAPI request with session support.
+#         thread_id: Thread identifier used for the turn.
+#         user_message: User message content.
+#         assistant_message: Assistant message content.
+#         run_id: Run identifier associated with the assistant response.
+#         log_file: JSONL log file generated for the turn.
+#     """
+#     conversation_turns = request.session.get('conversation_turns', [])
+#     conversation_turns.append(
+#         {
+#             'thread_id': thread_id,
+#             'user_message': user_message,
+#             'assistant_message': assistant_message,
+#             'run_id': run_id,
+#             'log_file': str(log_file),
+#             'created_at': utc_now_iso(),
+#         }
+#     )
+#     request.session['conversation_turns'] = conversation_turns
+
 def _append_conversation_turn(
     request: Request,
     thread_id: str,
@@ -786,28 +830,17 @@ def _append_conversation_turn(
     run_id: str | None,
     log_file: Path,
 ) -> None:
-    """Persist conversation turn metadata in session.
+    """Persist conversation turn metadata in SQLite."""
+    created_at = utc_now_iso()
 
-    Args:
-        request: FastAPI request with session support.
-        thread_id: Thread identifier used for the turn.
-        user_message: User message content.
-        assistant_message: Assistant message content.
-        run_id: Run identifier associated with the assistant response.
-        log_file: JSONL log file generated for the turn.
-    """
-    conversation_turns = request.session.get('conversation_turns', [])
-    conversation_turns.append(
-        {
-            'thread_id': thread_id,
-            'user_message': user_message,
-            'assistant_message': assistant_message,
-            'run_id': run_id,
-            'log_file': str(log_file),
-            'created_at': utc_now_iso(),
-        }
+    _append_conversation_turn_to_db(
+        thread_id=thread_id,
+        user_message=user_message,
+        assistant_message=assistant_message,
+        run_id=run_id,
+        log_file=log_file,
+        created_at=created_at,
     )
-    request.session['conversation_turns'] = conversation_turns
 
 
 def _read_jsonl_records(log_file_path: str) -> list[dict]:
@@ -940,11 +973,62 @@ def _get_stream_events_for_turn(log_file_path: str) -> list[dict]:
     return stream_events
 
 
+# @app.get('/chat/history')
+# async def chat_history(request: Request):
+#     thread_id = request.session.get('thread_id')
+#     last_run_id = request.session.get('last_run_id')
+#     conversation_turns = request.session.get('conversation_turns', [])
+
+#     if not thread_id:
+#         return {
+#             'thread_id': None,
+#             'last_run_id': last_run_id,
+#             'messages': [],
+#         }
+
+#     visible_messages: list[dict] = []
+
+#     for turn in conversation_turns:
+#         if turn.get('thread_id') != thread_id:
+#             continue
+
+#         user_message = turn.get('user_message', '')
+#         assistant_message = turn.get('assistant_message', '')
+#         run_id = turn.get('run_id')
+#         log_file_path = turn.get('log_file')
+#         created_at = turn.get('created_at')
+
+#         visible_messages.append(
+#             {
+#                 'message_id': None,
+#                 'role': 'user',
+#                 'content': user_message,
+#                 'created_at': created_at,
+#             }
+#         )
+
+#         visible_messages.append(
+#             {
+#                 'message_id': None,
+#                 'role': 'assistant',
+#                 'content': assistant_message,
+#                 'created_at': created_at,
+#                 'run_id': run_id,
+#                 'log_file': log_file_path,
+#                 'stream_events': _get_stream_events_for_turn(log_file_path) if log_file_path else [],
+#             }
+#         )
+
+#     return {
+#         'thread_id': thread_id,
+#         'last_run_id': last_run_id,
+#         'messages': visible_messages,
+#     }
+
 @app.get('/chat/history')
 async def chat_history(request: Request):
     thread_id = request.session.get('thread_id')
     last_run_id = request.session.get('last_run_id')
-    conversation_turns = request.session.get('conversation_turns', [])
 
     if not thread_id:
         return {
@@ -953,12 +1037,10 @@ async def chat_history(request: Request):
             'messages': [],
         }
 
+    conversation_turns = _read_conversation_turns(str(thread_id))
     visible_messages: list[dict] = []
 
     for turn in conversation_turns:
-        if turn.get('thread_id') != thread_id:
-            continue
-
         user_message = turn.get('user_message', '')
         assistant_message = turn.get('assistant_message', '')
         run_id = turn.get('run_id')
@@ -992,12 +1074,13 @@ async def chat_history(request: Request):
         'messages': visible_messages,
     }
 
-
 @app.post('/chat/reset')
 async def reset_chat(request: Request):
     previous_thread_id = request.session.pop('thread_id', None)
     previous_run_id = request.session.pop('last_run_id', None)
-    request.session.pop('conversation_turns', None)
+
+    if previous_thread_id:
+        _delete_conversation_turns(str(previous_thread_id))
 
     return {
         'reset': True,

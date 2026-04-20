@@ -45,3 +45,4 @@ def safe_serialize(obj: Any) -> Any:
 def append_jsonl(path: Path, record: dict) -> None:
     with path.open('a', encoding='utf-8') as f:
         f.write(json.dumps(record, ensure_ascii=False) + '\n')
+
