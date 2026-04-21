@@ -406,3 +406,10 @@ sequenceDiagram
     B-->>U: Muestra saldo
 ```
 
+## Cosas para Mejorar/Agregar:
+
+- [ ] uso de una http tool, no solo function tool
+- [ ] coreregir la renovación de tokens (a veces expira y no se renueva automáticamente)
+- [ ] logear de alguna manera el tiempo que tomó el proceso y mostrarlo en la ui
+- [ ] asíncronía
+- [ ] posibilidad de obtener un balance para clientes con múltiples cuentas

@@ -384,4 +384,3 @@ chatMessageElement.addEventListener('keydown', handleChatMessageKeydown);
 initializeChat().catch((error) => {
     setStatus(error.message, 'error');
 });
-
